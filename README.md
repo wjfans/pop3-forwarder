@@ -108,12 +108,14 @@ docker compose down
 
 ### 更新 image（在有原始碼的開發機執行）
 
-修改 `main.py` 後，重新 build 並推送到 Docker Hub，部署伺服器再 `docker compose pull` 即可套用最新版本，不需要把原始碼帶到伺服器上：
+修改 `main.py` 後，重新 build 並推送到 Docker Hub，部署伺服器再 `docker compose pull` 即可套用最新版本，不需要把原始碼帶到伺服器上。
+
+部署伺服器可能是 arm64（例如 Apple Silicon 或 ARM 主機），而開發機通常是 amd64，所以要用 `docker buildx` 建置同時支援 `linux/amd64` 與 `linux/arm64` 的 multi-arch image，不能只用 `docker build`（單一平台的 image 在架構不符的主機上會啟動失敗，出現 `exec format error`）：
 
 ```
 docker login
-docker build -t shuhao123/pop3-forwarder:latest .
-docker push shuhao123/pop3-forwarder:latest
+docker buildx create --name multiarch --driver docker-container --use   # 第一次建置前需要有支援 multi-platform 的 builder
+docker buildx build --platform linux/amd64,linux/arm64 -t shuhao123/pop3-forwarder:latest --push .
 ```
 
 ### 方式二：直接用 Python 執行（本機測試用）
