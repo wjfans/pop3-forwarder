@@ -1,0 +1,28 @@
+{
+  "check_interval_seconds": 300,
+  "smtp": {
+    "host": "smtp.gmail.com",
+    "port": 587,
+    "user": "your_gmail@gmail.com",
+    "password_env": "SMTP_PASSWORD",
+    "to_email": "target_receiver@gmail.com"
+  },
+  "accounts": [
+    {
+      "name": "帳號1",
+      "pop3_host": "pop3.example.com",
+      "pop3_port": 995,
+      "use_ssl": true,
+      "user": "account1@example.com",
+      "password_env": "ACCOUNT1_PASSWORD"
+    },
+    {
+      "name": "帳號2",
+      "pop3_host": "pop3.example.com",
+      "pop3_port": 995,
+      "use_ssl": true,
+      "user": "account2@example.com",
+      "password_env": "ACCOUNT2_PASSWORD"
+    }
+  ]
+}

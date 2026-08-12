@@ -1,0 +1,11 @@
+services:
+  pop3-forwarder:
+    build: .
+    container_name: pop3-forwarder
+    restart: unless-stopped
+    environment:
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - ACCOUNT1_PASSWORD=${ACCOUNT1_PASSWORD}
+      - ACCOUNT2_PASSWORD=${ACCOUNT2_PASSWORD}
+    volumes:
+      - ./config.json:/app/config.json:ro
