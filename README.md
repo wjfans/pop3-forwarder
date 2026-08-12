@@ -81,8 +81,11 @@ ACCOUNT2_PASSWORD=帳號2的POP3密碼
 
 ### 方式一：Docker Compose（建議）
 
+`docker-compose.yml` 預設直接使用已推送到 Docker Hub 的 image（`shuhao123/pop3-forwarder`），部署伺服器不需要原始碼，只要有 `docker-compose.yml`、`config.json`、`.env` 三個檔案即可：
+
 ```
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
 查看即時 log：
@@ -101,6 +104,16 @@ docker compose restart
 
 ```
 docker compose down
+```
+
+### 更新 image（在有原始碼的開發機執行）
+
+修改 `main.py` 後，重新 build 並推送到 Docker Hub，部署伺服器再 `docker compose pull` 即可套用最新版本，不需要把原始碼帶到伺服器上：
+
+```
+docker login
+docker build -t shuhao123/pop3-forwarder:latest .
+docker push shuhao123/pop3-forwarder:latest
 ```
 
 ### 方式二：直接用 Python 執行（本機測試用）

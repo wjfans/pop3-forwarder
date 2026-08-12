@@ -1,6 +1,6 @@
 services:
   pop3-forwarder:
-    build: .
+    image: shuhao123/pop3-forwarder:latest
     container_name: pop3-forwarder
     restart: unless-stopped
     environment:
