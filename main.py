@@ -3,6 +3,7 @@ import re
 import sys
 import time
 import json
+import html
 import poplib
 import smtplib
 from email import message_from_bytes, encoders
@@ -84,14 +85,15 @@ def forward_message(pop, msg_num, account, smtp_cfg, server):
     orig_subject = decode_mime_header(msg.get("Subject", "No Subject"))
     orig_from = decode_mime_header(msg.get("From", "Unknown"))
 
-    # 組合新信件內容
-    forward_msg = MIMEMultipart()
+    # 組合新信件內容 (最外層用 mixed，確保附件與內文並存)
+    forward_msg = MIMEMultipart("mixed")
     forward_msg["From"] = smtp_cfg["user"]
     forward_msg["To"] = smtp_cfg["to_email"]
     forward_msg["Subject"] = f"[{account['name']}] 轉寄: {orig_subject}"
 
-    body_text = f"--- 這是一封自動轉寄信件 ---\n原始發件人: {orig_from}\n帳號: {account['user']}\n----------------------------\n\n"
-    attachment_count = 0
+    body_plain = ""
+    body_html = ""
+    attachments = []
 
     # 取得內文與附件
     if msg.is_multipart():
@@ -100,23 +102,72 @@ def forward_message(pop, msg_num, account, smtp_cfg, server):
                 continue
 
             filename = get_attachment_filename(part)
-
-            if part.get_content_type() == "text/plain" and not filename:
-                body_text += decode_payload(part.get_payload(decode=True), part.get_content_charset())
-            elif filename:
+            if filename:
                 attachment = MIMEBase(part.get_content_maintype(), part.get_content_subtype())
                 attachment.set_payload(part.get_payload(decode=True))
                 encoders.encode_base64(attachment)
                 attachment.add_header("Content-Disposition", "attachment", filename=filename)
-                forward_msg.attach(attachment)
-                attachment_count += 1
+                attachments.append(attachment)
+            else:
+                ctype = part.get_content_type()
+                payload = decode_payload(part.get_payload(decode=True), part.get_content_charset())
+                if ctype == "text/plain":
+                    body_plain += payload
+                elif ctype == "text/html":
+                    body_html += payload
     else:
-        body_text += decode_payload(msg.get_payload(decode=True), msg.get_content_charset())
+        ctype = msg.get_content_type()
+        payload = decode_payload(msg.get_payload(decode=True), msg.get_content_charset())
+        if ctype == "text/html":
+            body_html = payload
+        else:
+            body_plain = payload
 
-    forward_msg.attach(MIMEText(body_text, "plain", "utf-8"))
+    # 安全地轉義發件人與帳號資料，防範 HTML 注入風險
+    safe_orig_from = html.escape(orig_from)
+    safe_account_user = html.escape(account["user"])
+
+    plain_header = (
+        f"--- 這是一封自動轉寄信件 ---\n"
+        f"原始發件人: {orig_from}\n"
+        f"帳號: {account['user']}\n"
+        f"----------------------------\n\n"
+    )
+
+    html_header = (
+        f'<div style="background-color: #f8f9fa; border: 1px solid #e9ecef; border-left: 4px solid #0d6efd; '
+        f'padding: 10px 14px; margin-bottom: 16px; font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif; font-size: 14px; color: #333;">'
+        f'<strong>--- 這是一封自動轉寄信件 ---</strong><br>'
+        f'<strong>原始發件人:</strong> {safe_orig_from}<br>'
+        f'<strong>帳號:</strong> {safe_account_user}'
+        f'</div>'
+    )
+
+    if body_html:
+        # 若原信包含 <body> 標籤，將標頭插入 <body> 後，否則前置
+        body_match = re.search(r"(<body[^>]*>)", body_html, re.IGNORECASE)
+        if body_match:
+            pos = body_match.end()
+            full_html = body_html[:pos] + html_header + body_html[pos:]
+        else:
+            full_html = html_header + body_html
+
+        full_plain = plain_header + (body_plain if body_plain else "(本信件主要為 HTML 格式)")
+
+        alt_part = MIMEMultipart("alternative")
+        alt_part.attach(MIMEText(full_plain, "plain", "utf-8"))
+        alt_part.attach(MIMEText(full_html, "html", "utf-8"))
+        forward_msg.attach(alt_part)
+    else:
+        full_plain = plain_header + body_plain
+        forward_msg.attach(MIMEText(full_plain, "plain", "utf-8"))
+
+    # 附加所有附件
+    for att in attachments:
+        forward_msg.attach(att)
 
     server.send_message(forward_msg)
-    log(f"Successfully forwarded email: {orig_subject} (attachments: {attachment_count})")
+    log(f"Successfully forwarded email: {orig_subject} (attachments: {len(attachments)})")
 
 def fetch_and_forward(account, smtp_cfg):
     log(f"Checking account: {account['name']} ({account['user']})")
